@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<plugin
+        id="#pluginId#"
+        name="#pluginId#"
+        description="My plugin #pluginId#"
+        provider="#user#"
+        class="mermaid.Plugin">
+
+    <!-- Gradle script replaces this tag with a references to libs -->
+    <runtime/>
+    <actionSets>
+        <contextSensitiveActionSet id="mermaid.Export">
+            <!-- Определяем контекст действия -->
+            <contextTypes all="false">
+                <include type="InteractionDiagram"/>
+            </contextTypes>
+
+            <!--
+                 menuPath:
+                   Пункт контекстного меню, после которого будет выведен 
+                   наш пункт.
+                   Для Open Specification... нужно указать OpenSpecification.
+            -->
+            <action
+                    style="normal"
+                    menuPath="Export"
+                    id="mermaid.Export"
+                    label="Export diagram as Mermaid">
+                <actionController class="mermaid.ExportMermaidPluginAction"/>
+            </action>
+        </contextSensitiveActionSet>
+    </actionSets>
+</plugin>
