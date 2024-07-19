@@ -11,7 +11,6 @@ import com.vp.plugin.model.IInteractionActor
 import com.vp.plugin.model.IInteractionLifeLine
 import com.vp.plugin.model.IMessage
 import com.vp.plugin.model.factory.IModelElementFactory
-import com.vp.plugin.model.ICombinedFragment
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.awt.event.ActionEvent
@@ -36,12 +35,29 @@ class ExportMermaidPluginAction : VPContextActionController {
         println("Diagram: ${context.diagram.type}")
     }
 
+    fun escapeHTML(s: String): String {
+        val out = StringBuilder(Math.max(16, s.length))
+        for (i in 0..s.length - 1) {
+            val c = s.get(i)
+            if (c == '#' || c == ';') {
+                out.append("#")
+                out.append(c.code)
+                out.append(';')
+            } else {
+                out.append(c)
+            }
+        }
+        return out.toString()
+    }
+
     override fun performAction(action: VPAction, context: VPContext, event: ActionEvent) {
         val writer = StringWriter()
 
         writer.write("sequenceDiagram\n")
 
         val diagram = context.diagram
+
+        writer.write("title: ${diagram.name}\n")
 
         // viewManager.showMessage(diagram.toPropertiesString())
         // lifelines
@@ -62,23 +78,22 @@ class ExportMermaidPluginAction : VPContextActionController {
                 }
 
         var activations = HashMap<String, ArrayList<IMessage>>()
-        
 
         val sequenceNumbering =
                 SequenceNumbering.fromInt(
                         diagram.getDiagramPropertyByName("sequenceNumbering").valueAsInt
                 )
-        
+
         // TODO: Add Fragments support
         // var fragments = HashMap<String, Pair<Int, Int>>()
         //
-        // diagram.toDiagramElementArray().forEach {element -> 
+        // diagram.toDiagramElementArray().forEach {element ->
         //     // println("${element.modelElement.modelType}")
         //
         //     if (element.modelElement.modelType == "CombinedFragment") {
         //         val model = element.modelElement as ICombinedFragment
         //         println("FRAGMENT: ${model.name}; ${model.toPropertiesString()}")
-        //         
+        //
         //     }
         // }
 
@@ -134,8 +149,9 @@ class ExportMermaidPluginAction : VPContextActionController {
             // viewManager.showMessage(
             //         "${message.name}: ${activationFrom?.id}; ${activationTo?.id}"
             // )
+
             writer.write(
-                    "${lifeLineFrom.name}${arrow}${lifeLineTo.name}: ${message.sequenceNumber}. ${message.name}\n"
+                    "${lifeLineFrom.name}${arrow}${lifeLineTo.name}: ${message.sequenceNumber}. ${escapeHTML(message.name ?: "")}\n"
             )
 
             if (activationFrom != null) {
@@ -148,7 +164,7 @@ class ExportMermaidPluginAction : VPContextActionController {
                 }
             }
 
-            if (activationTo != null) {
+            if (activationTo != null && activationFrom != activationTo) {
                 val msg = activations.getOrDefault(activationTo.id, arrayListOf())
                 if (msg.first() == message) {
                     writer.write("activate ${lifeLineTo.name}\n")
