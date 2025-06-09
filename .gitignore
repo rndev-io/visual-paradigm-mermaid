@@ -2,3 +2,6 @@
 /.gradle/
 /build/
 /build/classes/kotlin/main/
+
+# Visual Paradigm API documentation
+/vp-plugin-javadoc/

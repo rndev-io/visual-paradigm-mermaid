@@ -15,13 +15,13 @@ This is plugin for [Visual Paradigm](https://www.visual-paradigm.com/) diagrammi
 - Lifelines, Actors
 - Messages (send, return)
 - Activations
+- Notes
 
 
 ## TODO
 
 ### Sequence Diagram
 
-- Notes
 - Fragments (seq, loop, alt, parallel)
 
 ### ER Diagram
