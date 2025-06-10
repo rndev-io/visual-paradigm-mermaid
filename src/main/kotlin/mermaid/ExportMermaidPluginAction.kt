@@ -7,11 +7,13 @@ import com.vp.plugin.action.VPContext
 import com.vp.plugin.action.VPContextActionController
 import com.vp.plugin.model.IActionTypeReturn
 import com.vp.plugin.model.IActionTypeSend
+import com.vp.plugin.model.IFrame
 import com.vp.plugin.model.IInteractionActor
 import com.vp.plugin.model.IInteractionLifeLine
 import com.vp.plugin.model.IMessage
 import com.vp.plugin.model.INOTE
 import com.vp.plugin.model.factory.IModelElementFactory
+import com.vp.plugin.diagram.IDiagramElement
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.awt.event.ActionEvent
@@ -93,18 +95,15 @@ class ExportMermaidPluginAction : VPContextActionController {
                         diagram.getDiagramPropertyByName("sequenceNumbering").valueAsInt
                 )
 
-        // TODO: Add Fragments support
-        // var fragments = HashMap<String, Pair<Int, Int>>()
-        //
-        // diagram.toDiagramElementArray().forEach {element ->
-        //     // println("${element.modelElement.modelType}")
-        //
-        //     if (element.modelElement.modelType == "CombinedFragment") {
-        //         val model = element.modelElement as ICombinedFragment
-        //         println("FRAGMENT: ${model.name}; ${model.toPropertiesString()}")
-        //
-        //     }
-        // }
+        // Collect and sort frames by position
+        val frames = mutableListOf<Pair<IDiagramElement, IFrame>>()
+        diagram.toDiagramElementArray().forEach { element ->
+            val modelElement = element.modelElement
+            if (modelElement != null && modelElement.modelType == "Frame") {
+                val frameModel = modelElement as IFrame
+                frames.add(Pair(element, frameModel))
+            }
+        }
 
         val messages =
                 diagram.toDiagramElementArray(IModelElementFactory.MODEL_TYPE_MESSAGE)
@@ -277,6 +276,43 @@ class ExportMermaidPluginAction : VPContextActionController {
             }
         }
 
+        // Sort frames by Y position (top to bottom) to handle nesting properly
+        val sortedFrames = frames.sortedBy { it.first.y }
+        
+        // Create frame boundaries - determine which messages are inside each frame
+        data class FrameBoundary(val frame: IFrame, val element: IDiagramElement, val messagesBefore: List<IMessage>, val messagesInside: List<IMessage>)
+        val frameBoundaries = mutableListOf<FrameBoundary>()
+        
+        sortedFrames.forEach { (frameElement: IDiagramElement, frame: IFrame) ->
+            val frameTop = frameElement.y
+            val frameBottom = frameElement.y + frameElement.height
+            val frameLeft = frameElement.x  
+            val frameRight = frameElement.x + frameElement.width
+            
+            // Find messages that are inside this frame based on Y coordinates
+            val messagesInFrame = mutableListOf<IMessage>()
+            val messagesBeforeFrame = mutableListOf<IMessage>()
+            
+            messageElements.forEach { msgElement ->
+                val message = msgElement.modelElement as IMessage
+                val msgY = msgElement.y
+                val msgX = msgElement.x
+                
+                // For sequence diagrams, focus primarily on Y coordinates (time) with some X tolerance
+                val xTolerance = 50 // Allow messages slightly outside frame horizontally
+                val withinYBounds = msgY.toDouble() >= frameTop.toDouble() && msgY.toDouble() <= frameBottom.toDouble()
+                val withinXBounds = msgX.toDouble() >= (frameLeft.toDouble() - xTolerance) && msgX.toDouble() <= (frameRight.toDouble() + xTolerance)
+                
+                if (withinYBounds && withinXBounds) {
+                    messagesInFrame.add(message)
+                } else if (msgY.toDouble() < frameTop.toDouble()) {
+                    messagesBeforeFrame.add(message)
+                }
+            }
+            
+            frameBoundaries.add(FrameBoundary(frame, frameElement, messagesBeforeFrame, messagesInFrame))
+        }
+
         messages.forEach { message ->
             // store Activation messages
             // check first and last message in future for activating and deactivating
@@ -296,7 +332,21 @@ class ExportMermaidPluginAction : VPContextActionController {
             }
         }
         
+        // Track which frames have been opened
+        val openFrames = mutableSetOf<String>()
+        
         messages.forEach { message ->
+            // Check if we need to open any frames before this message
+            frameBoundaries.forEach { boundary ->
+                val firstMessageInFrame = boundary.messagesInside.minByOrNull { messages.indexOf(it) }
+                if (firstMessageInFrame == message && !openFrames.contains(boundary.frame.id)) {
+                    val frameType = boundary.frame.type?.lowercase() ?: "opt"
+                    val frameLabel = boundary.frame.name?.let { " $it" } ?: ""
+                    writer.write("$frameType$frameLabel\n")
+                    openFrames.add(boundary.frame.id)
+                }
+            }
+            
             var arrow = "->>"
             when (message.actionType) {
                 is IActionTypeSend -> {
@@ -340,13 +390,22 @@ class ExportMermaidPluginAction : VPContextActionController {
             messageNotes.filter { it.messageId == message.id }.forEach { note ->
                 writer.write("Note over ${note.participantName}: ${escapeHTML(note.text)}\n")
             }
+            
+            // Check if we need to close any frames after this message
+            frameBoundaries.forEach { boundary ->
+                val lastMessageInFrame = boundary.messagesInside.maxByOrNull { messages.indexOf(it) }
+                if (lastMessageInFrame == message && openFrames.contains(boundary.frame.id)) {
+                    writer.write("end\n")
+                    openFrames.remove(boundary.frame.id)
+                }
+            }
         }
 
         val clipboard = Toolkit.getDefaultToolkit().getSystemClipboard()
         clipboard.setContents(StringSelection(writer.toString()), null)
         viewManager.showMessageDialog(
                 viewManager.getRootFrame(),
-                "Mermaid diagram copied to clipboard (found ${messageNotes.size} notes attached to messages)"
+                "Mermaid diagram copied to clipboard"
         )
     }
 
