@@ -30,5 +30,20 @@
                 <actionController class="mermaid.ExportMermaidPluginAction"/>
             </action>
         </contextSensitiveActionSet>
+        
+        <!-- Add ER diagram support -->
+        <contextSensitiveActionSet id="mermaid.ExportER">
+            <contextTypes all="false">
+                <include type="ERDiagram"/>
+            </contextTypes>
+            
+            <action
+                    style="normal"
+                    menuPath="Export"
+                    id="mermaid.ExportER"
+                    label="Export ER diagram as Mermaid">
+                <actionController class="mermaid.ExportERMermaidPluginAction"/>
+            </action>
+        </contextSensitiveActionSet>
     </actionSets>
 </plugin>
